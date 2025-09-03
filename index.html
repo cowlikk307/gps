@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live GPS Tracker</title>
+    <title>Flight Performance Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
@@ -17,9 +17,6 @@
             padding: 1.5rem;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             margin-bottom: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
         }
         .label {
             color: #9ca3af;
@@ -32,141 +29,476 @@
             font-size: 1.5rem;
             font-weight: 700;
         }
+        .speed-value {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #38bdf8; /* Sky blue color for prominence */
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .report-table th, .report-table td {
+            padding: 0.5rem;
+            text-align: left;
+        }
+        .report-table th {
+            border-bottom: 2px solid #6b7280;
+            color: #e5e7eb;
+        }
+        .report-table tr:nth-child(even) {
+            background-color: #374151;
+        }
+        /* Button styling for multiple buttons */
+        .test-button {
+            padding: 1rem 2rem;
+            font-size: 1.25rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .test-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .test-button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: .5;
+          }
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-white flex flex-col items-center justify-center min-h-screen p-6">
 
-    <div class="max-w-xl w-full text-center">
-        <h1 class="text-4xl font-bold mb-3 text-indigo-400">Live GPS Tracker</h1>
-        <p class="text-gray-400 mb-6">
-            Grant permission to access your device's location.
+    <div class="max-w-3xl w-full">
+        <h1 class="text-4xl font-bold text-center mb-6 text-indigo-400">Flight Performance Analyzer</h1>
+        <p class="text-gray-400 text-center mb-8">
+            A tool for experimental aircraft pilots to determine key performance metrics.
         </p>
 
-        <div id="status-card" class="card bg-gray-800">
-            <div class="label">Status</div>
-            <div id="status" class="value text-lg text-yellow-400">Initializing...</div>
+        <!-- Main Status and Instructions Card -->
+        <div class="card bg-gray-800">
+            <div class="label">Current Status</div>
+            <div id="status" class="value text-green-400">Initializing Geolocation...</div>
+            <p id="instruction" class="text-gray-300 mt-2">
+                Please grant location access to begin.
+            </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Time Card -->
+        <!-- Buttons for test selection and flow control -->
+        <div id="button-container" class="flex flex-col sm:flex-row justify-center gap-4 mt-4 mb-8">
+            <button id="start-climb-button" class="test-button bg-indigo-600 hover:bg-indigo-700 text-white">Start Climb & Glide Tests</button>
+            <button id="start-demo-button" class="test-button bg-yellow-600 hover:bg-yellow-700 text-white">Start Demo</button>
+            <button id="next-test-button" class="test-button bg-indigo-600 hover:bg-indigo-700 text-white hidden">Next Test</button>
+            <button id="show-report-button" class="test-button bg-purple-600 hover:bg-purple-700 text-white hidden">Show Report</button>
+        </div>
+
+        <!-- Live Data Display -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             <div class="card">
                 <div class="label">Time</div>
                 <div id="time-data" class="value">-</div>
             </div>
-
-            <!-- Location Card -->
-            <div class="card md:col-span-2">
-                <div class="label">Location (Lat, Long)</div>
-                <div id="location-data" class="value">-</div>
-            </div>
-
-            <!-- Speed Card -->
             <div class="card">
-                <div class="label">Speed</div>
-                <div id="speed-data" class="value">-</div>
-            </div>
-
-            <!-- Altitude Card -->
-            <div class="card">
-                <div class="label">Altitude</div>
+                <div class="label">Altitude (ft AGL)</div>
                 <div id="altitude-data" class="value">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Speed (mph)</div>
+                <div id="speed-data" class="value speed-value">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Heading (deg)</div>
+                <div id="heading-data" class="value">-</div>
+            </div>
+        </div>
+
+        <!-- Report Section (Initially hidden) -->
+        <div id="report-section" class="card bg-gray-800 hidden">
+            <div class="label mb-4">Final Report</div>
+            <div id="report-content" class="text-gray-200 overflow-x-auto"></div>
+            <div class="text-center mt-6">
+                <button id="reset-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-full">Reset & Start Over</button>
             </div>
         </div>
     </div>
 
     <script>
+        // --- UI Element References ---
         const statusElement = document.getElementById('status');
+        const instructionElement = document.getElementById('instruction');
+        const startClimbButton = document.getElementById('start-climb-button');
+        const startDemoButton = document.getElementById('start-demo-button');
+        const nextTestButton = document.getElementById('next-test-button');
+        const showReportButton = document.getElementById('show-report-button');
         const timeElement = document.getElementById('time-data');
-        const locationElement = document.getElementById('location-data');
-        const speedElement = document.getElementById('speed-data');
         const altitudeElement = document.getElementById('altitude-data');
+        const speedElement = document.getElementById('speed-data');
+        const headingElement = document.getElementById('heading-data');
+        const reportSection = document.getElementById('report-section');
+        const reportContent = document.getElementById('report-content');
+        const resetButton = document.getElementById('reset-button');
 
-        // Function to update the time display every second
-        function updateTime() {
-            const now = new Date();
-            timeElement.textContent = now.toLocaleTimeString();
+        // --- Global State Variables ---
+        const state = {
+            testPhase: 'initial', // 'initial', 'ready_to_climb', 'vy_test', 'ready_for_glide_setup', 'glide_test', 'done_climb', 'done_glide'
+            testSpeeds: [50, 60, 70],
+            currentSpeedIndex: 0,
+            testData: [], // Stores logged data for each test
+            vyResults: [],
+            vxResults: [],
+            glideResults: [],
+            initialAltitude: 0,
+            currentLocation: null,
+            watchId: null,
+            isDemo: false,
+            demoAltitude: 304.8, // 1000 feet in meters for demo
+            demoIntervalId: null,
+            testType: 'climb'
+        };
+
+        // --- Helper Functions ---
+        const toFixed = (num, precision) => num !== null ? num.toFixed(precision) : 'N/A';
+        const mpsToMph = (mps) => mps * 2.23694;
+        const metersToFeet = (meters) => meters * 3.28084;
+        const degToRad = (deg) => deg * (Math.PI / 180);
+        
+        // Haversine formula to calculate distance between two lat/long points
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // metres
+            const φ1 = degToRad(lat1);
+            const φ2 = degToRad(lat2);
+            const Δφ = degToRad(lat2 - lat1);
+            const Δλ = degToRad(lon2 - lon1);
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // in meters
         }
-        setInterval(updateTime, 1000);
 
-        // Geolocation API check and watch position
-        if ('geolocation' in navigator) {
-            statusElement.textContent = 'Awaiting permission...';
+        // --- Test Logic and State Transitions ---
+
+        function startVyTest() {
+            const speed = state.testSpeeds[state.currentSpeedIndex];
+            statusElement.textContent = `Climbing at ${speed} mph...`;
+            instructionElement.textContent = `Maintain a constant airspeed of ${speed} mph. The test will automatically end after 1000 feet of climb.`;
+            state.testPhase = 'vy_test';
+            state.initialAltitude = state.currentLocation.altitude;
+            state.testData = [{ ...state.currentLocation, timestamp: Date.now() }];
+            nextTestButton.textContent = 'Climbing...';
+            nextTestButton.disabled = true;
+        }
+
+        function endVyTest() {
+            nextTestButton.disabled = false;
+
+            const startData = state.testData[0];
+            const endData = state.testData[state.testData.length - 1];
+
+            if (!endData || !startData) {
+                 statusElement.textContent = `Error: Missing data for test.`;
+                 instructionElement.textContent = `Please try again.`;
+                 return;
+            }
+
+            const timeElapsed = (endData.timestamp - startData.timestamp) / 1000; // seconds
+            const altitudeGained = metersToFeet(endData.altitude - startData.altitude);
+            const climbRate = (altitudeGained / timeElapsed) * 60; // feet per minute
+
+            state.vyResults.push({ speed: state.testSpeeds[state.currentSpeedIndex], rate: climbRate.toFixed(2) });
+
+            // Horizontal Distance Calculation for Vx
+            let totalDistance = 0;
+            for (let i = 1; i < state.testData.length; i++) {
+                const prev = state.testData[i-1];
+                const curr = state.testData[i];
+                if (prev && curr) {
+                    totalDistance += calculateDistance(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
+                }
+            }
+            const climbAngle = Math.atan(metersToFeet(endData.altitude - startData.altitude) / totalDistance);
+            state.vxResults.push({ speed: state.testSpeeds[state.currentSpeedIndex], angle: (climbAngle * 180 / Math.PI).toFixed(2) });
+
+            state.currentSpeedIndex++;
             
-            const options = {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            };
+            if (state.currentSpeedIndex < state.testSpeeds.length) {
+                const nextSpeed = state.testSpeeds[state.currentSpeedIndex];
+                statusElement.textContent = `Test Complete!`;
+                instructionElement.textContent = `You climbed at a rate of ${climbRate.toFixed(0)} FPM. Click 'Next Test' to try ${nextSpeed} mph.`;
+                nextTestButton.textContent = 'Next Test';
+                nextTestButton.onclick = startVyTest;
+                state.testPhase = 'ready_to_climb';
+            } else {
+                statusElement.textContent = `All Climb Tests Complete!`;
+                instructionElement.textContent = `Now, prepare for the glide test. Throttle to idle and maintain the last climb speed (${state.testSpeeds[state.testSpeeds.length - 1]} mph). Click 'Begin Glide Test' when ready.`;
+                nextTestButton.textContent = 'Begin Glide Test';
+                nextTestButton.onclick = beginGlideTest;
+                state.testPhase = 'ready_for_glide_setup';
+            }
+        }
 
-            navigator.geolocation.watchPosition(
-                (position) => {
-                    const coords = position.coords;
-                    
-                    statusElement.textContent = 'Location Found!';
-                    statusElement.classList.remove('text-yellow-400');
-                    statusElement.classList.add('text-green-400');
-                    
-                    // Location data
-                    const lat = coords.latitude.toFixed(6);
-                    const lon = coords.longitude.toFixed(6);
-                    locationElement.textContent = `${lat}, ${lon}`;
+        function beginGlideTest() {
+            statusElement.textContent = `Glide Test in Progress...`;
+            instructionElement.textContent = `Throttle to idle and maintain a smooth glide at ${state.testSpeeds[state.testSpeeds.length - 1]} mph. The test will end when you lose 1000 feet of altitude.`;
+            state.testPhase = 'glide_test';
+            state.initialAltitude = state.currentLocation.altitude;
+            state.testData = [{ ...state.currentLocation, timestamp: Date.now() }];
+            nextTestButton.textContent = 'Gliding...';
+            nextTestButton.disabled = true;
+        }
 
-                    // Speed data
-                    if (coords.speed !== null) {
-                        const speedMph = (coords.speed * 2.23694).toFixed(2); // Convert m/s to mph
-                        speedElement.textContent = `${speedMph} mph`;
-                    } else {
-                        speedElement.textContent = 'N/A';
-                    }
+        function endGlideTest() {
+            nextTestButton.disabled = false;
+            
+            const startData = state.testData[0];
+            const endData = state.testData[state.testData.length - 1];
 
-                    // Altitude data
-                    if (coords.altitude !== null) {
-                        const altitudeFeet = (coords.altitude * 3.28084).toFixed(2); // Convert meters to feet
-                        altitudeElement.textContent = `${altitudeFeet} ft`;
-                    } else {
-                        altitudeElement.textContent = 'N/A';
-                    }
-                },
-                (error) => {
-                    let errorMessage = 'Error: ';
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMessage += "Permission Denied. Please enable location services for this page.";
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMessage += "Location information is unavailable.";
-                            break;
-                        case error.TIMEOUT:
-                            errorMessage += "Request timed out. Trying again...";
-                            break;
-                        default:
-                            errorMessage += "An unknown error occurred.";
-                            break;
-                    }
-                    statusElement.textContent = errorMessage;
-                    statusElement.classList.remove('text-green-400');
-                    statusElement.classList.add('text-red-500');
-                },
-                options
+            if (!endData || !startData) {
+                 statusElement.textContent = `Error: Missing data for glide test.`;
+                 instructionElement.textContent = `Please try again.`;
+                 return;
+            }
+
+            const altitudeLost = metersToFeet(startData.altitude - endData.altitude);
+            const distanceTraveled = calculateDistance(
+                startData.latitude, startData.longitude,
+                endData.latitude, endData.longitude
             );
-        } else {
-            statusElement.textContent = 'Geolocation is not supported by your browser.';
-            statusElement.classList.remove('text-yellow-400');
-            statusElement.classList.add('text-red-500');
+            const glideRatio = (distanceTraveled / altitudeLost).toFixed(2);
+            const speed = mpsToMph(endData.speed).toFixed(0);
+
+            state.glideResults.push({ speed: speed, ratio: glideRatio });
+
+            statusElement.textContent = `Glide Test Complete!`;
+            instructionElement.textContent = `Your glide ratio was ${glideRatio}:1. Click 'Show Report' to see your results.`;
+            nextTestButton.classList.add('hidden');
+            showReportButton.classList.remove('hidden');
+            state.testPhase = 'done_glide';
+            
+        }
+
+        // --- Report Generation ---
+        function generateReport() {
+            statusElement.textContent = 'Test Reports';
+            instructionElement.textContent = 'Review your flight test results below.';
+            startClimbButton.classList.add('hidden');
+            startDemoButton.classList.add('hidden');
+            nextTestButton.classList.add('hidden');
+            showReportButton.classList.add('hidden');
+            reportSection.classList.remove('hidden');
+            clearInterval(state.demoIntervalId);
+
+            let reportHtml = '';
+
+            if (state.vyResults.length > 0 && state.vxResults.length > 0) {
+                reportHtml += `
+                    <h3 class="text-xl font-bold mt-4 mb-2">Climb Performance</h3>
+                    <p>Calculated from data collected during climb tests.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <!-- 50 mph Climb Test Results -->
+                        <div class="card bg-gray-700">
+                            <h4 class="font-bold text-lg mb-2">50 mph Climb</h4>
+                            <div class="label">Rate of Climb ($$V_y$$)</div>
+                            <div class="value">${state.vyResults[0].rate} FPM</div>
+                            <div class="label mt-2">Angle of Climb ($$V_x$$)</div>
+                            <div class="value">${state.vxResults[0].angle}°</div>
+                        </div>
+                        <!-- 60 mph Climb Test Results -->
+                        <div class="card bg-gray-700">
+                            <h4 class="font-bold text-lg mb-2">60 mph Climb</h4>
+                            <div class="label">Rate of Climb ($$V_y$$)</div>
+                            <div class="value">${state.vyResults[1].rate} FPM</div>
+                            <div class="label mt-2">Angle of Climb ($$V_x$$)</div>
+                            <div class="value">${state.vxResults[1].angle}°</div>
+                        </div>
+                        <!-- 70 mph Climb Test Results -->
+                        <div class="card bg-gray-700">
+                            <h4 class="font-bold text-lg mb-2">70 mph Climb</h4>
+                            <div class="label">Rate of Climb ($$V_y$$)</div>
+                            <div class="value">${state.vyResults[2].rate} FPM</div>
+                            <div class="label mt-2">Angle of Climb ($$V_x$$)</div>
+                            <div class="value">${state.vxResults[2].angle}°</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (state.glideResults.length > 0) {
+                reportHtml += `
+                    <h3 class="text-xl font-bold mt-4 mb-2">Best Glide Speed</h3>
+                    <p>Calculated from data collected during the glide test.</p>
+                    <div class="card bg-gray-700">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <div class="label">Average Speed (mph)</div>
+                                <div class="value">${state.glideResults[0].speed}</div>
+                            </div>
+                            <div>
+                                <div class="label">Glide Ratio</div>
+                                <div class="value">${state.glideResults[0].ratio}:1</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            reportContent.innerHTML = reportHtml;
+        }
+
+        // --- Geolocation and Live Data Loop ---
+        function handlePositionUpdate(position) {
+            const coords = position.coords;
+            state.currentLocation = coords;
+            
+            // Update live display data
+            const speedMph = mpsToMph(coords.speed);
+            const altitudeFeet = metersToFeet(coords.altitude);
+            
+            timeElement.textContent = new Date().toLocaleTimeString();
+            altitudeElement.textContent = toFixed(altitudeFeet, 2);
+            speedElement.textContent = toFixed(speedMph, 2);
+            headingElement.textContent = toFixed(coords.heading, 0);
+
+            // Log data based on current test phase
+            switch(state.testPhase) {
+                case 'vy_test':
+                    state.testData.push({ ...coords, timestamp: Date.now() });
+                    if (altitudeFeet - metersToFeet(state.initialAltitude) >= 1000) {
+                        endVyTest();
+                    }
+                    break;
+                case 'glide_test':
+                    state.testData.push({ ...coords, timestamp: Date.now() });
+                    if (metersToFeet(state.initialAltitude) - altitudeFeet >= 1000) {
+                        endGlideTest();
+                    }
+                    break;
+            }
+        }
+        
+        // Simulates a GPS position update for demo mode
+        function simulatePositionUpdate() {
+            let speed = 0;
+            let altitudeChange = 0;
+            const climbRateFPM = 500; // Simulated Climb Rate in FPM
+            const glideRateFPM = 600; // Simulated Glide Rate in FPM
+            const climbRateMPS = climbRateFPM / 60 * 0.3048;
+            const glideRateMPS = glideRateFPM / 60 * 0.3048;
+            
+            if (state.testPhase === 'vy_test') {
+                 altitudeChange = climbRateMPS;
+                 speed = mpsToMph(state.testSpeeds[state.currentSpeedIndex] * 0.44704);
+            } else if (state.testPhase === 'glide_test') {
+                 altitudeChange = -glideRateMPS;
+                 speed = mpsToMph(state.testSpeeds[state.testSpeeds.length - 1] * 0.44704);
+            } else if (state.testPhase.startsWith('ready')) {
+                 altitudeChange = 0;
+                 speed = mpsToMph(10 * 0.44704); // Simulate slow taxi speed
+            } else {
+                 return; // Do not update position if not in a test phase
+            }
+
+            state.demoAltitude += altitudeChange;
+             
+            // Create a fake position object
+            const simulatedPosition = {
+                coords: {
+                    latitude: 42.8465 + (Math.random() * 0.001),
+                    longitude: -106.3150 + (Math.random() * 0.001),
+                    altitude: state.demoAltitude,
+                    speed: speed,
+                    heading: 0,
+                    altitudeAccuracy: 1,
+                    accuracy: 1
+                },
+                timestamp: Date.now(),
+            };
+            handlePositionUpdate(simulatedPosition);
+        }
+
+        function handlePositionError(error) {
+            let errorMessage = "Error: Geolocation is not working.";
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = "Error: Permission Denied. Please enable location services for this page.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = "Error: Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = "Error: Request timed out.";
+                    break;
+            }
+            statusElement.textContent = errorMessage;
+            instructionElement.textContent = "Please refresh the page and try again after checking your location permissions.";
+            startClimbButton.disabled = true;
+            startDemoButton.disabled = true;
+        }
+
+        // --- Event Listeners and Main Functionality ---
+        function initGeolocation() {
+            if ('geolocation' in navigator && !state.isDemo) {
+                state.watchId = navigator.geolocation.watchPosition(
+                    handlePositionUpdate,
+                    handlePositionError,
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else if (state.isDemo) {
+                state.demoIntervalId = setInterval(simulatePositionUpdate, 1000); // Update every second
+                // Force a first update immediately to avoid blank screen
+                simulatePositionUpdate();
+            } else {
+                handlePositionError({ code: 0, message: 'Geolocation is not supported.' });
+            }
+        }
+
+        // Event handler for the start buttons
+        function startTestFlow() {
+            startClimbButton.classList.add('hidden');
+            startDemoButton.classList.add('hidden');
+            nextTestButton.classList.remove('hidden');
+
+            state.testPhase = 'ready_to_climb';
+            statusElement.textContent = `Ready for Test: ${state.testSpeeds[state.currentSpeedIndex]} mph`;
+            instructionElement.textContent = `Taxi to the start of the runway, wait for GPS signal, then click 'Begin Test'.`;
+            nextTestButton.textContent = 'Begin Test';
+            nextTestButton.onclick = startVyTest;
+        }
+        
+        function startDemoFlow() {
+             state.isDemo = true;
+             startClimbButton.classList.add('hidden');
+             startDemoButton.classList.add('hidden');
+             nextTestButton.classList.remove('hidden');
+             initGeolocation();
+             
+             statusElement.textContent = `Ready for Demo: ${state.testSpeeds[state.currentSpeedIndex]} mph Climb Test`;
+             instructionElement.textContent = `The program is now simulating a flight. Watch the live data and follow the instructions. Click 'Begin Demo' to start.`;
+             nextTestButton.textContent = 'Begin Demo';
+             nextTestButton.onclick = startVyTest;
+        }
+
+        function resetTests() {
+             location.reload();
+        }
+
+        startClimbButton.addEventListener('click', () => startTestFlow());
+        startDemoButton.addEventListener('click', startDemoFlow);
+        showReportButton.addEventListener('click', generateReport);
+        resetButton.addEventListener('click', resetTests);
+
+        // Initial setup on page load
+        window.onload = () => {
+             initGeolocation();
+             statusElement.textContent = "Please grant location access.";
+             instructionElement.textContent = "Once granted, choose a test to begin.";
         }
     </script>
 </body>
 </html>
-```
-eof
----
-### How to Run the Program
-Now that you have the file, the next step is to run it correctly. The easiest way to do this is with a simple Python web server. If you don't have Python, you can find instructions on how to install it by searching for "install python".
-
-1.  **Save the file.** Save the code above into a new file named `index.html` on your computer.
-2.  **Open your terminal** or command prompt.
-3.  **Navigate to the file's directory.** For example, if you saved it on your Desktop, you would type `cd Desktop`.
-4.  **Start the server** by typing the following command and pressing Enter:
-    ```bash
-    python3 -m http.server
-    
