@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live GPS Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            background-color: #1f2937;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .label {
+            color: #9ca3af;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .value {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-white flex flex-col items-center justify-center min-h-screen p-6">
+
+    <div class="max-w-xl w-full text-center">
+        <h1 class="text-4xl font-bold mb-3 text-indigo-400">Live GPS Tracker</h1>
+        <p class="text-gray-400 mb-6">
+            Grant permission to access your device's location.
+        </p>
+
+        <div id="status-card" class="card bg-gray-800">
+            <div class="label">Status</div>
+            <div id="status" class="value text-lg text-yellow-400">Initializing...</div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Time Card -->
+            <div class="card">
+                <div class="label">Time</div>
+                <div id="time-data" class="value">-</div>
+            </div>
+
+            <!-- Location Card -->
+            <div class="card md:col-span-2">
+                <div class="label">Location (Lat, Long)</div>
+                <div id="location-data" class="value">-</div>
+            </div>
+
+            <!-- Speed Card -->
+            <div class="card">
+                <div class="label">Speed</div>
+                <div id="speed-data" class="value">-</div>
+            </div>
+
+            <!-- Altitude Card -->
+            <div class="card">
+                <div class="label">Altitude</div>
+                <div id="altitude-data" class="value">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const timeElement = document.getElementById('time-data');
+        const locationElement = document.getElementById('location-data');
+        const speedElement = document.getElementById('speed-data');
+        const altitudeElement = document.getElementById('altitude-data');
+
+        // Function to update the time display every second
+        function updateTime() {
+            const now = new Date();
+            timeElement.textContent = now.toLocaleTimeString();
+        }
+        setInterval(updateTime, 1000);
+
+        // Geolocation API check and watch position
+        if ('geolocation' in navigator) {
+            statusElement.textContent = 'Awaiting permission...';
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            };
+
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    const coords = position.coords;
+                    
+                    statusElement.textContent = 'Location Found!';
+                    statusElement.classList.remove('text-yellow-400');
+                    statusElement.classList.add('text-green-400');
+                    
+                    // Location data
+                    const lat = coords.latitude.toFixed(6);
+                    const lon = coords.longitude.toFixed(6);
+                    locationElement.textContent = `${lat}, ${lon}`;
+
+                    // Speed data
+                    if (coords.speed !== null) {
+                        const speedMph = (coords.speed * 2.23694).toFixed(2); // Convert m/s to mph
+                        speedElement.textContent = `${speedMph} mph`;
+                    } else {
+                        speedElement.textContent = 'N/A';
+                    }
+
+                    // Altitude data
+                    if (coords.altitude !== null) {
+                        const altitudeFeet = (coords.altitude * 3.28084).toFixed(2); // Convert meters to feet
+                        altitudeElement.textContent = `${altitudeFeet} ft`;
+                    } else {
+                        altitudeElement.textContent = 'N/A';
+                    }
+                },
+                (error) => {
+                    let errorMessage = 'Error: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += "Permission Denied. Please enable location services for this page.";
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += "Location information is unavailable.";
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += "Request timed out. Trying again...";
+                            break;
+                        default:
+                            errorMessage += "An unknown error occurred.";
+                            break;
+                    }
+                    statusElement.textContent = errorMessage;
+                    statusElement.classList.remove('text-green-400');
+                    statusElement.classList.add('text-red-500');
+                },
+                options
+            );
+        } else {
+            statusElement.textContent = 'Geolocation is not supported by your browser.';
+            statusElement.classList.remove('text-yellow-400');
+            statusElement.classList.add('text-red-500');
+        }
+    </script>
+</body>
+</html>
+```
+eof
+---
+### How to Run the Program
+Now that you have the file, the next step is to run it correctly. The easiest way to do this is with a simple Python web server. If you don't have Python, you can find instructions on how to install it by searching for "install python".
+
+1.  **Save the file.** Save the code above into a new file named `index.html` on your computer.
+2.  **Open your terminal** or command prompt.
+3.  **Navigate to the file's directory.** For example, if you saved it on your Desktop, you would type `cd Desktop`.
+4.  **Start the server** by typing the following command and pressing Enter:
+    ```bash
+    python3 -m http.server
+    
