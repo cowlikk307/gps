@@ -97,6 +97,12 @@
             <button id="next-test-button" class="test-button bg-indigo-600 hover:bg-indigo-700 text-white hidden">Next Test</button>
             <button id="show-report-button" class="test-button bg-purple-600 hover:bg-purple-700 text-white hidden">Show Report</button>
         </div>
+        
+        <!-- Desired Speed Display -->
+        <div id="target-speed-container" class="text-center my-4 hidden">
+            <div class="text-lg text-gray-400 font-semibold uppercase tracking-widest">Target Speed</div>
+            <div id="target-speed-value" class="text-6xl font-extrabold text-yellow-400 mt-2">-</div>
+        </div>
 
         <!-- Live Data Display -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -143,10 +149,12 @@
         const reportSection = document.getElementById('report-section');
         const reportContent = document.getElementById('report-content');
         const resetButton = document.getElementById('reset-button');
+        const targetSpeedContainer = document.getElementById('target-speed-container');
+        const targetSpeedValue = document.getElementById('target-speed-value');
 
         // --- Global State Variables ---
         const state = {
-            testPhase: 'initial', // 'initial', 'ready_to_climb', 'vy_test', 'ready_for_glide_setup', 'glide_test', 'done_climb', 'done_glide'
+            testPhase: 'initial', // 'initial', 'ready_to_climb', 'waiting_for_climb', 'vy_test', 'ready_for_glide_setup', 'glide_test', 'done_climb', 'done_glide'
             testSpeeds: [50, 60, 70],
             currentSpeedIndex: 0,
             testData: [], // Stores logged data for each test
@@ -186,13 +194,14 @@
 
         function startVyTest() {
             const speed = state.testSpeeds[state.currentSpeedIndex];
-            statusElement.textContent = `Climbing at ${speed} mph...`;
-            instructionElement.textContent = `Maintain a constant airspeed of ${speed} mph. The test will automatically end after 1000 feet of climb.`;
-            state.testPhase = 'vy_test';
+            statusElement.textContent = `Preparing for climb test at ${speed} mph...`;
+            instructionElement.textContent = `Start your climb now. The test will automatically begin once you've gained 100 feet of altitude while maintaining a constant speed.`;
+            state.testPhase = 'waiting_for_climb';
             state.initialAltitude = state.currentLocation.altitude;
-            state.testData = [{ ...state.currentLocation, timestamp: Date.now() }];
-            nextTestButton.textContent = 'Climbing...';
+            state.testData = []; // Clear data for new test
+            nextTestButton.textContent = 'Waiting for climb...';
             nextTestButton.disabled = true;
+            targetSpeedValue.textContent = `${speed} mph`;
         }
 
         function endVyTest() {
@@ -251,6 +260,7 @@
             state.testData = [{ ...state.currentLocation, timestamp: Date.now() }];
             nextTestButton.textContent = 'Gliding...';
             nextTestButton.disabled = true;
+            targetSpeedContainer.classList.add('hidden');
         }
 
         function endGlideTest() {
@@ -292,6 +302,7 @@
             nextTestButton.classList.add('hidden');
             showReportButton.classList.add('hidden');
             reportSection.classList.remove('hidden');
+            targetSpeedContainer.classList.add('hidden');
             clearInterval(state.demoIntervalId);
 
             let reportHtml = '';
@@ -367,6 +378,20 @@
 
             // Log data based on current test phase
             switch(state.testPhase) {
+                case 'waiting_for_climb':
+                    // Check for both altitude gain and stable speed before starting the test
+                    const targetSpeed = state.testSpeeds[state.currentSpeedIndex];
+                    const speedTolerance = 5; // mph
+                    const hasGainedAltitude = altitudeFeet - metersToFeet(state.initialAltitude) >= 100;
+                    const hasStableSpeed = Math.abs(speedMph - targetSpeed) <= speedTolerance;
+
+                    if (hasGainedAltitude && hasStableSpeed) {
+                        statusElement.textContent = `Climbing at ${targetSpeed} mph...`;
+                        instructionElement.textContent = `Maintaining a constant airspeed. The test will automatically end after 1000 feet of climb.`;
+                        state.testPhase = 'vy_test';
+                        state.testData.push({ ...coords, timestamp: Date.now() });
+                    }
+                    break;
                 case 'vy_test':
                     state.testData.push({ ...coords, timestamp: Date.now() });
                     if (altitudeFeet - metersToFeet(state.initialAltitude) >= 1000) {
@@ -391,7 +416,7 @@
             const climbRateMPS = climbRateFPM / 60 * 0.3048;
             const glideRateMPS = glideRateFPM / 60 * 0.3048;
             
-            if (state.testPhase === 'vy_test') {
+            if (state.testPhase === 'waiting_for_climb' || state.testPhase === 'vy_test') {
                  altitudeChange = climbRateMPS;
                  speed = mpsToMph(state.testSpeeds[state.currentSpeedIndex] * 0.44704);
             } else if (state.testPhase === 'glide_test') {
@@ -463,12 +488,14 @@
             startClimbButton.classList.add('hidden');
             startDemoButton.classList.add('hidden');
             nextTestButton.classList.remove('hidden');
+            targetSpeedContainer.classList.remove('hidden');
 
             state.testPhase = 'ready_to_climb';
             statusElement.textContent = `Ready for Test: ${state.testSpeeds[state.currentSpeedIndex]} mph`;
-            instructionElement.textContent = `Taxi to the start of the runway, wait for GPS signal, then click 'Begin Test'.`;
+            instructionElement.textContent = `Fly level at a constant speed, then click 'Begin Test'.`;
             nextTestButton.textContent = 'Begin Test';
             nextTestButton.onclick = startVyTest;
+            targetSpeedValue.textContent = `${state.testSpeeds[state.currentSpeedIndex]} mph`;
         }
         
         function startDemoFlow() {
@@ -476,12 +503,14 @@
              startClimbButton.classList.add('hidden');
              startDemoButton.classList.add('hidden');
              nextTestButton.classList.remove('hidden');
+             targetSpeedContainer.classList.remove('hidden');
              initGeolocation();
              
              statusElement.textContent = `Ready for Demo: ${state.testSpeeds[state.currentSpeedIndex]} mph Climb Test`;
              instructionElement.textContent = `The program is now simulating a flight. Watch the live data and follow the instructions. Click 'Begin Demo' to start.`;
              nextTestButton.textContent = 'Begin Demo';
              nextTestButton.onclick = startVyTest;
+             targetSpeedValue.textContent = `${state.testSpeeds[state.currentSpeedIndex]} mph`;
         }
 
         function resetTests() {
